@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 import sys
 import textwrap
@@ -203,10 +204,11 @@ def build_services(args: argparse.Namespace):
         no_speech_prob=0.6,
     )
     llm = OpenAILLMService(
-        api_key="local",
+        # Lokaler mlx-lm-Server braucht keinen Schlüssel; OpenAI-API oder Proxy bekommen OPENAI_API_KEY.
+        api_key=os.environ.get("OPENAI_API_KEY", "local"),
         base_url=args.llm_url,
         model=args.llm_model,
-        params=OpenAILLMService.InputParams(temperature=args.temperature, max_tokens=200),
+        params=OpenAILLMService.InputParams(temperature=args.temperature, max_tokens=args.max_tokens),
     )
     tts = None
     if not args.no_tts:
@@ -348,7 +350,7 @@ async def main_async(args: argparse.Namespace) -> int:
     rows = summarize(results)
     (out_dir / "summary.json").write_text(
         json.dumps({"canary": CANARY, "llm": args.llm_model, "stt": args.stt_model,
-                    "temperature": args.temperature, "rows": rows},
+                    "temperature": args.temperature, "max_tokens": args.max_tokens, "rows": rows},
                    ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print_summary(rows)
     return 0
@@ -361,6 +363,8 @@ def main() -> int:
     parser.add_argument("--llm-url", default="http://127.0.0.1:8080/v1")
     parser.add_argument("--llm-model", default="mlx-community/Llama-3.2-3B-Instruct-4bit")
     parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--max-tokens", type=int, default=200,
+                        help="Antwortbudget; Modelle mit Reasoning brauchen mehr, sonst bleibt die Antwort leer")
     parser.add_argument("--stt-model", default=MLXModel.LARGE_V3_TURBO_Q4.value)
     parser.add_argument("--tts-voice", default="de_DE-thorsten-medium")
     parser.add_argument("--no-tts", action="store_true")

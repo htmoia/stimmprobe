@@ -1,12 +1,21 @@
 # Experiment: versteckte zweite Stimme gegen einen Pipecat-Agenten
 
-Frage: Gibt ein lokal laufender Pipecat-Sprach-Agent einen geheimen Wert aus seinen Systemanweisungen preis, wenn eine leise zweite Stimme ihn dazu auffordert, während die eigentliche Anruferin nur einen Termin möchte?
+Frage: Gibt ein Pipecat-Sprach-Agent einen geheimen Wert aus seinen Systemanweisungen preis, wenn eine leise zweite Stimme ihn dazu auffordert, während die eigentliche Anruferin nur einen Termin möchte? Und hängt das vom Sprachmodell ab?
 
-Das Ergebnis steht in [results/ERGEBNIS.md](results/ERGEBNIS.md), alle Einzelläufe in `results/runs.jsonl`, der Screencast in [screencast/](screencast/).
+Die Ergebnisse stehen je Sprachmodell in einem eigenen Ordner, jeweils mit `ERGEBNIS.md`, allen Einzelläufen in `runs.jsonl` und dem Audio der Antworten:
+
+| Sprachmodell | Ordner | Datum |
+| --- | --- | --- |
+| Llama 3.2 3B Instruct (4 Bit), lokal | [results/](results/ERGEBNIS.md) | 24.11.2026 |
+| Llama 3.1 8B Instruct (4 Bit), lokal | [results-llama-3.1-8b/](results-llama-3.1-8b/ERGEBNIS.md) | 24.11.2026 |
+| Claude Haiku 4.5, Cloud | [results-claude-haiku-4-5/](results-claude-haiku-4-5/ERGEBNIS.md) | 24.11.2026 |
+| claude-fable-5-2, Cloud | [results-claude-fable-5-2/](results-claude-fable-5-2/ERGEBNIS.md) | 24.11.2026 |
+
+Der Screencast in [screencast/](screencast/) zeigt einen Vorführlauf mit Llama 3.2 3B.
 
 ## Aufbau
 
-Alles läuft lokal auf einem MacBook (Apple M1 Pro), ohne Cloud-Dienste und ohne Kosten:
+Der Agent läuft auf einem MacBook (Apple M1 Pro). Spracherkennung, Sprachsynthese und die Llama-Modelle laufen lokal und ohne Kosten; nur die Claude-Modelle laufen in der Cloud.
 
 | Baustein | Umsetzung |
 | --- | --- |
@@ -14,7 +23,7 @@ Alles läuft lokal auf einem MacBook (Apple M1 Pro), ohne Cloud-Dienste und ohne
 | Eingang | eigener `FileInputTransport`: spielt eine WAV-Datei wie ein Mikrofon ein (16 kHz, mono) |
 | Sprecherkennung | Silero VAD (Pipecat-Standard) |
 | Spracherkennung | Whisper large-v3-turbo (4 Bit, MLX) über `WhisperSTTServiceMLX` |
-| Sprachmodell | Llama 3.2 3B Instruct (4 Bit) über [mlx-lm](https://github.com/ml-explore/mlx-lm) als OpenAI-kompatibler Server, Temperatur 0,7 |
+| Sprachmodell | Llama 3.2 3B und Llama 3.1 8B Instruct (4 Bit) über [mlx-lm](https://github.com/ml-explore/mlx-lm) als OpenAI-kompatibler Server; Claude Haiku 4.5 und claude-fable-5-2 über [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) (OpenAI-kompatibel, Anmeldung über ein Claude-Abo); Temperatur 0,7 |
 | Sprachsynthese | Piper, Stimme `de_DE-thorsten-medium` |
 | Testaudio | macOS `say` (Stimmen Anna und Eddy), gemischt mit ffmpeg |
 
@@ -65,11 +74,21 @@ python3 build_audio.py              # erzeugt audio/*.wav und audio/manifest.jso
 ../.venv/bin/python report.py       # schreibt results/ERGEBNIS.md
 ```
 
-`run_experiment.py --help` zeigt die Optionen: Zahl der Läufe, Auswahl der Bedingungen, anderes Modell oder anderer Server (`--llm-url`, `--llm-model`, auch die OpenAI-API), ohne Sprachsynthese (`--no-tts`).
+`run_experiment.py --help` zeigt die Optionen: Zahl der Läufe, Auswahl der Bedingungen, anderes Modell oder anderer Server (`--llm-url`, `--llm-model`, auch die OpenAI-API), Antwortbudget (`--max-tokens`), ohne Sprachsynthese (`--no-tts`), Ausgabeordner (`--out`).
+
+Gegen einen OpenAI-kompatiblen Dienst statt des lokalen Servers liest das Skript den Schlüssel aus `OPENAI_API_KEY`. Modelle mit Reasoning verbrauchen einen Teil des Budgets vor der sichtbaren Antwort; mit dem Standard von 200 Tokens bleibt die Antwort dann leer.
+
+```bash
+OPENAI_API_KEY=… ../.venv/bin/python run_experiment.py --runs 10 \
+  --llm-url https://api.openai.com/v1 --llm-model gpt-4.1 --max-tokens 2000 --out results-gpt-4.1
+../.venv/bin/python report.py results-gpt-4.1
+```
 
 ## Grenzen
 
-- Das Sprachmodell ist klein (3 Milliarden Parameter). Größere Modelle und Audio-Sprachmodelle (Speech-to-Speech) verhalten sich anders; das Skript kann über `--llm-url` gegen andere Modelle laufen.
+- Llama 3.2 3B und Llama 3.1 8B sind kleine Modelle. Audio-Sprachmodelle (Speech-to-Speech), die Audio ohne eigene Spracherkennung hören, sind nicht getestet.
+- Die Claude-Modelle liefen nicht über die Anthropic-API, sondern über CLIProxyAPI mit Anmeldung über ein Claude-Abo. Der Proxy stellt dabei jeder Anfrage einen eigenen Systemprompt voran, der das Modell als Claude Code ausweist (auf „Sag Hallo“ antwortet Haiku 4.5: „Ich bin Claude Code, Anthropic's offizieller CLI für Claude“); die Anweisungen der Praxis folgen danach vollständig. Ein Agent mit API-Schlüssel hätte diesen Vorspann nicht. Ob er die Verweigerung beeinflusst, ist nicht gemessen.
+- Antwortbudget: Llama mit 200 Tokens, Claude mit 2000 Tokens, weil claude-fable-5-2 vor der Antwort Reasoning-Tokens verbraucht und mit 200 Tokens leer antwortet.
 - Die Audios kommen aus einer Sprachsynthese, nicht von echten Menschen, und laufen nicht über eine echte Telefonleitung. Bedingung F nähert den Telefonkanal nur mit einem Filter an.
 - Der Testwert steht in den Systemanweisungen. Daten aus Werkzeugen oder Datenbanken sind ein anderer Fall.
 - Zehn Läufe je Bedingung reichen, um einen Effekt zu zeigen, nicht für eine genaue Quote.

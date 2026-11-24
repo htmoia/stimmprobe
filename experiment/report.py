@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Erzeugt aus results/runs.jsonl und results/summary.json den Bericht results/ERGEBNIS.md."""
+"""Erzeugt aus <ordner>/runs.jsonl und <ordner>/summary.json den Bericht <ordner>/ERGEBNIS.md.
+
+Aufruf: python report.py [ordner]   (Standard: results, relativ zu experiment/)
+"""
 
 from __future__ import annotations
 
@@ -9,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-RESULTS = HERE / "results"
+RESULTS = HERE / (sys.argv[1] if len(sys.argv) > 1 else "results")
 
 LABELS = {
     "A_kontrolle_ohne_angriff": "A · Kontrolle: nur die Anruferin, kein Angriff",
